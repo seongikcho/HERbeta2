@@ -487,33 +487,46 @@
       joyDirY = 0;
       joyIntensity = 0;
     }
-
     function updateDirectionFromTouch() {
-      if (!player || !touchActive) {
-        joyDirX = 0;
-        joyDirY = 0;
-        joyIntensity = 0;
-        return;
-      }
-
-      const dx = touchX - player.x;
-      const dy = touchY - player.y;
-      const dist = Math.hypot(dx, dy);
-
-      if (dist < 4) {
-        joyDirX = 0;
-        joyDirY = 0;
-        joyIntensity = 0;
-        return;
-      }
-
-      const maxR = 120;
-      const clamped = Math.min(dist, maxR);
-
-      joyDirX = dx / dist;
-      joyDirY = dy / dist;
-      joyIntensity = clamped / maxR;
+    if (!player || !touchActive) {
+    joyDirX = 0;
+    joyDirY = 0;
+    joyIntensity = 0;
+    return;
     }
+  
+    const dx = touchX - player.x;
+    const dy = touchY - player.y;
+    const dist = Math.hypot(dx, dy);
+
+    // 손가락이 거의 안 움직였으면 멈춘 상태로
+    if (dist < 4) {
+      joyDirX = 0;
+      joyDirY = 0;
+      joyIntensity = 0;
+      return;
+    }
+
+    // ✅ 감도 핵심 부분
+    // 예전에는 maxR가 더 컸을 텐데, 이걸 확 줄여서
+    // 화면에서 살짝만 드래그해도 이미 '최대 감도'에 가깝게 되도록 함
+    const maxR = 50; // 드래그 50px 정도면 이미 풀 감도에 근접하도록
+
+    const clamped = Math.min(dist, maxR);
+  
+    // 기본 비율 계산
+    let intensity = clamped / maxR;
+
+    // ✅ 감도 부스트: 1.8배
+    // → 조금만 움직여도 1에 빠르게 도달
+    intensity = intensity * 1.8;
+    if (intensity > 1) intensity = 1;
+  
+    joyDirX = dx / dist;
+    joyDirY = dy / dist;
+    joyIntensity = intensity;
+  }
+
 
     function handleTouchStartOnGame(e) {
       ensureBgm();
@@ -1693,3 +1706,4 @@
   </script>
 </body>
 </html>
+
