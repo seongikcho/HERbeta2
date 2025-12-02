@@ -236,7 +236,7 @@
       letter-spacing: 0.04em;
     }
 
-    /* 하단 컨트롤 영역 (귀환 버튼 + 힌트) */
+    /* 하단 컨트롤 영역 (조이스틱 + 귀환 버튼 + 힌트) */
     #controlArea {
       flex: 0 0 150px;
       display: flex;
@@ -248,13 +248,45 @@
     #controlTop {
       flex: 1 1 auto;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      align-items: flex-start;
+      justify-content: space-between;
+    }
+
+    /* 조이스틱 (레이아웃 분리, 중앙 기준) */
+    #joystick {
+      position: relative;
+      width: 140px;
+      height: 140px;
+      touch-action: none;
+    }
+    #stick-base {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 90px;
+      height: 90px;
+      margin-left: -45px;
+      margin-top: -45px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.6);
+      border: 2px solid rgba(255,255,255,0.2);
+    }
+    #stick-knob {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 44px;
+      height: 44px;
+      margin-left: -22px;
+      margin-top: -22px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.75);
     }
 
     /* 귀환 버튼 */
     #returnButton {
-      width: 160px;
+      align-self: center;
+      width: 140px;
       height: 54px;
       border-radius: 12px;
       background: #222;
@@ -394,6 +426,12 @@
     <!-- 하단 컨트롤 / 안내 영역 -->
     <div id="controlArea">
       <div id="controlTop">
+        <!-- 모바일 조이스틱 -->
+        <div id="joystick">
+          <div id="stick-base"></div>
+          <div id="stick-knob"></div>
+        </div>
+
         <!-- 귀환 버튼 -->
         <div id="returnButton" class="disabled">현실로 귀환</div>
       </div>
@@ -436,6 +474,10 @@
 
     const returnButton = document.getElementById('returnButton');
 
+    const joystick   = document.getElementById('joystick');
+    const stickBase  = document.getElementById('stick-base');
+    const stickKnob  = document.getElementById('stick-knob');
+
     const tutorialHint   = document.getElementById('tutorialHint');
     const startOverlay   = document.getElementById('startOverlay');
     const startButton    = document.getElementById('startButton');
@@ -465,159 +507,113 @@
       bgmStarted = true;
     }
 
-    // ===== 입력 : 화면 전체 드래그 기반 이동 =====
+    // ===== 조이스틱 =====
     let joyActive = false;
     let joyId = null;
+    let joyCenterX = 0;
+    let joyCenterY = 0;
     let joyDirX = 0;
     let joyDirY = 0;
-    let joyIntensity = 0;   // 0~1, 손가락까지 거리 비례
-
-    // 전체 화면 터치 상태
-    let touchActive = false;
-    let touchTouchId = null;
-    let touchX = 0;
-    let touchY = 0;
+    let joyIntensity = 0;   // 0~1, 얼마나 멀리 밀었는지
 
     function resetJoystick() {
       joyActive = false;
       joyId = null;
-      touchActive = false;
-      touchTouchId = null;
       joyDirX = 0;
       joyDirY = 0;
       joyIntensity = 0;
-    }
-    function updateDirectionFromTouch() {
-    if (!player || !touchActive) {
-    joyDirX = 0;
-    joyDirY = 0;
-    joyIntensity = 0;
-    return;
-    }
-  
-    const dx = touchX - player.x;
-    const dy = touchY - player.y;
-    const dist = Math.hypot(dx, dy);
-
-    // 손가락이 거의 안 움직였으면 멈춘 상태로
-    if (dist < 4) {
-      joyDirX = 0;
-      joyDirY = 0;
-      joyIntensity = 0;
-      return;
+      stickKnob.style.left = '50%';
+      stickKnob.style.top  = '50%';
     }
 
-    // ✅ 감도 핵심 부분
-    // 예전에는 maxR가 더 컸을 텐데, 이걸 확 줄여서
-    // 화면에서 살짝만 드래그해도 이미 '최대 감도'에 가깝게 되도록 함
-    const maxR = 50; // 드래그 50px 정도면 이미 풀 감도에 근접하도록
-
-    const clamped = Math.min(dist, maxR);
-  
-    // 기본 비율 계산
-    let intensity = clamped / maxR;
-
-    // ✅ 감도 부스트: 1.8배
-    // → 조금만 움직여도 1에 빠르게 도달
-    intensity = intensity * 1.8;
-    if (intensity > 1) intensity = 1;
-  
-    joyDirX = dx / dist;
-    joyDirY = dy / dist;
-    joyIntensity = intensity;
-  }
-
-
-    function handleTouchStartOnGame(e) {
+    function joystickTouchStart(e) {
+      e.preventDefault();
       ensureBgm();
-      if (!e.changedTouches || e.changedTouches.length === 0) return;
-
       const t = e.changedTouches[0];
-      touchActive = true;
-      touchTouchId = t.identifier;
-
-      const rect = gameArea.getBoundingClientRect();
-      touchX = t.clientX - rect.left;
-      touchY = t.clientY - rect.top;
-
+      if (!t) return;
       joyActive = true;
       joyId = t.identifier;
-
-      updateDirectionFromTouch();
-      e.preventDefault();
+      const rect = stickBase.getBoundingClientRect();
+      joyCenterX = rect.left + rect.width / 2;
+      joyCenterY = rect.top + rect.height / 2;
+      joystickTouchMove(e);
     }
 
-    function handleTouchMoveOnGame(e) {
-      if (!touchActive) return;
+   function joystickTouchMove(e) {
+      if (!joyActive) return;
       const touches = e.touches;
-      let found = null;
-
+      let t = null;
       for (let i = 0; i < touches.length; i++) {
-        if (touches[i].identifier === touchTouchId) {
-          found = touches[i];
+        if (touches[i].identifier === joyId) {
+          t = touches[i];
           break;
         }
       }
-      if (!found) return;
+      if (!t) return;
 
-      const rect = gameArea.getBoundingClientRect();
-      touchX = found.clientX - rect.left;
-      touchY = found.clientY - rect.top;
+      const rect = stickBase.getBoundingClientRect();
+      const dx = t.clientX - joyCenterX;
+      const dy = t.clientY - joyCenterY;
+      const baseR = rect.width / 2;
 
-      updateDirectionFromTouch();
-      e.preventDefault();
+      // 🔹 조이스틱이 움직일 수 있는 실제 반경을 더 넓게 사용
+      const maxR = baseR * 0.9;
+
+      let dist = Math.hypot(dx, dy);
+      let nx = 0, ny = 0, intensity = 0;
+
+      if (dist > 0) {
+        const clamped = Math.min(dist, maxR);
+        nx = dx / dist;
+        ny = dy / dist;
+        intensity = clamped / maxR; // 0 ~ 1
+
+        const knobX = joyCenterX + nx * clamped;
+        const knobY = joyCenterY + ny * clamped;
+        stickKnob.style.left = ((knobX - rect.left) / rect.width * 100) + '%';
+        stickKnob.style.top  = ((knobY - rect.top)  / rect.height * 100) + '%';
+      } else {
+        stickKnob.style.left = '50%';
+        stickKnob.style.top  = '50%';
+      }
+
+      // 🔹 감도 업: 조금만 움직여도 빠르게 반응
+      const deadZone = 0.04;  // 중앙 살짝 흔들리는 구간
+      if (intensity < deadZone) {
+        joyDirX = 0;
+        joyDirY = 0;
+        joyIntensity = 0;
+      } else {
+        joyDirX = nx;
+        joyDirY = ny;
+
+        // 0~1 로 노멀라이즈
+        let norm = (intensity - deadZone) / (1 - deadZone);
+        if (norm < 0) norm = 0;
+        if (norm > 1) norm = 1;
+
+        // 감도 부스트: 중간값을 위로 끌어올림
+        // (예: 반쯤만 밀어도 70~80% 속도 느낌)
+        norm = Math.min(1, norm * 1.35);
+
+        joyIntensity = norm;
+      }
     }
 
-    function handleTouchEndOnGame(e) {
-      if (!touchActive) return;
-      const changed = e.changedTouches;
-      for (let i = 0; i < changed.length; i++) {
-        if (changed[i].identifier === touchTouchId) {
+    function joystickTouchEnd(e) {
+      const touches = e.changedTouches;
+      for (let i = 0; i < touches.length; i++) {
+        if (touches[i].identifier === joyId) {
           resetJoystick();
           break;
         }
       }
-      e.preventDefault();
     }
 
-    gameArea.addEventListener('touchstart', handleTouchStartOnGame, { passive: false });
-    gameArea.addEventListener('touchmove',  handleTouchMoveOnGame,  { passive: false });
-    gameArea.addEventListener('touchend',   handleTouchEndOnGame,   { passive: false });
-    gameArea.addEventListener('touchcancel',handleTouchEndOnGame,   { passive: false });
-
-    // PC 테스트용 마우스 입력
-    let mouseDown = false;
-
-    function handleMouseDownOnGame(e) {
-      ensureBgm();
-      mouseDown = true;
-
-      const rect = gameArea.getBoundingClientRect();
-      touchX = e.clientX - rect.left;
-      touchY = e.clientY - rect.top;
-      touchActive = true;
-
-      updateDirectionFromTouch();
-    }
-
-    function handleMouseMoveOnGame(e) {
-      if (!mouseDown) return;
-      const rect = gameArea.getBoundingClientRect();
-      touchX = e.clientX - rect.left;
-      touchY = e.clientY - rect.top;
-      touchActive = true;
-      updateDirectionFromTouch();
-    }
-
-    function handleMouseUpOnGame() {
-      mouseDown = false;
-      touchActive = false;
-      resetJoystick();
-    }
-
-    gameArea.addEventListener('mousedown', handleMouseDownOnGame);
-    gameArea.addEventListener('mousemove', handleMouseMoveOnGame);
-    window.addEventListener('mouseup', handleMouseUpOnGame);
+    joystick.addEventListener('touchstart', joystickTouchStart, {passive:false});
+    joystick.addEventListener('touchmove',  joystickTouchMove,  {passive:false});
+    joystick.addEventListener('touchend',   joystickTouchEnd,   {passive:false});
+    joystick.addEventListener('touchcancel',joystickTouchEnd,   {passive:false});
 
     // ===== 게임 상태 =====
     let gameMode = 'start'; // start, play, upgrade, dead, clear
@@ -659,7 +655,7 @@
 
     // ===== 스테이지별 하단 안내 문구 (5스테이지는 없음) =====
     const stageHints = [
-      '화면을 드래그해서 이동하고,\n달이 초록색일 때 오른쪽 버튼으로 현실로 귀환.', // Stage 1
+      '왼쪽 동그라미를 드래그해서 이동,\n달이 초록색일 때 오른쪽 버튼으로 현실로 귀환.', // Stage 1
       '달은 매 29.5초마다 다시 초록색이 됩니다.',           // Stage 2
       '회색지대에는 다양한 디소더가 존재합니다.',             // Stage 3
       '죽지 않을 만큼 다친 상처는\n현실로 귀환하면 모두 치료됩니다.' // Stage 4
@@ -1017,6 +1013,8 @@
       return 1;
     }
 
+    // 모든 스테이지(0~3)에 대해, 29.5초 이상 버티며 달이 여러 번 초록이 되면
+    // 더 강한 적 조합을 쓰도록 확장
     function chooseEnemyType() {
       let baseStage = meta.stageLevel;
       if (baseStage > 3) baseStage = 3;
@@ -1312,13 +1310,13 @@
         mvy /= len;
 
         const baseSpeed = getPlayerSpeed();
-        const speed = baseSpeed * (0.4 + 0.6 * joyIntensity);
+        const speed = baseSpeed * (0.4 + 0.6 * joyIntensity); // 조금만 밀어도 빠르게 반응
 
         player.x += mvx * speed * dt;
         player.y += mvy * speed * dt;
       }
 
-      // 화면 밖으로 못 나가게 클램프
+      // 위/아래 포함 화면 밖으로 못 나가게 클램프
       player.x = Math.max(player.radius, Math.min(viewW - player.radius, player.x));
       player.y = Math.max(player.radius, Math.min(viewH - player.radius, player.y));
 
@@ -1439,7 +1437,7 @@
             e.hp -= b.damage;
             const vl = Math.hypot(b.vx, b.vy) || 1;
             e.x += (b.vx / vl) * BULLET_KNOCKBACK;
-            e.y += (b.vx / vl) * BULLET_KNOCKBACK;
+            e.y += (b.vy / vl) * BULLET_KNOCKBACK;
             hit = true;
             break;
           }
@@ -1706,4 +1704,9 @@
   </script>
 </body>
 </html>
+
+
+
+
+
 
